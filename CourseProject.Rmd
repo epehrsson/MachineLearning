@@ -1,0 +1,69 @@
+---
+title: "Coursera Machine Learning Final Project"
+author: "Erica Pehrsson"
+date: "February 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache.path = "Coursera/")
+```
+
+The [Weight Lifting Exercises dataset](http://groupware.les.inf.puc-rio.br/har) monitored participants while they performed bicep curls in five ways: one correctly and four incorrectly. Using this dataset, I built a prediction model of the manner in which participants performed the curl. The study consisted of six participants, 10 repetitions for each manner.
+
+# Load libraries
+
+```{r load libraries}
+library(caret)
+```
+
+# Load data
+
+```{r load data, cache=TRUE, cache.lazy=FALSE}
+training = read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",na.strings=c("NA","","#DIV/0!"))
+testing = read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",na.strings=c("NA","","#DIV/0!"))
+```
+
+In addition to the manner in which the exercise was performed, 159 variables were collected. These include 38 measures each for four sensors, plus timestamp and user information. Prior to running the model, I removed the timestamp and user variables, as well as 93 variables for which data was missing in 98% or more of entries, for a total of 52 variables in addition to class.
+
+```{r filter variables}
+variables = colnames(training[,which(apply(training,2,function(x) sum(is.na(x))) == 0)])
+variables = setdiff(variables,c("X","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window","num_window","user_name"))
+```
+
+# Train model
+
+I created a validation set to estimate the out-of-sample error. 
+
+```{r create validation}
+val = createDataPartition(training$classe,p=3/4)[[1]]
+training.t = training[val,]
+training.v = training[-val,]
+```
+
+I trained the model using bagged CART (classification and regression trees), as implemented in the module "treebag", with 10-fold cross-validation. This technique trains decision trees on several random subsamples of the data (with replacement), then aggregates the trees to create a final model with reduced variance. I chose this technique because it is well-suited for categorical classification, but uses bagging to reduce variance.
+
+```{r train model, cache=TRUE, cache.lazy=FALSE}
+set.seed(4233)
+
+trCtrl = trainControl(method="cv",number=10,trim=TRUE)
+model = train(classe~.,data=training.t[,variables],method="treebag",trControl=trCtrl)
+```
+
+# Test model on validation set
+
+I calculated the accuracy of the model using the validation set. The expected out-of-sample error is 99.6%. 
+
+```{r predict validation}
+pred.v = predict(model,newdata=training.v[,variables])
+confusionMatrix(training.v$classe,pred.v)
+```
+
+# Test model on testing set
+
+Finally, I used the model to predict the class for 20 test records.
+
+```{r predict test}
+pred.t = predict(model,newdata=testing[,setdiff(variables,"classe")])
+data.frame(ID=testing$problem_id,Prediction=pred.t)
+```
